@@ -64,7 +64,37 @@ Open the Streamlit URL shown in the terminal (usually `http://localhost:8501`).
   "match": true
 }
 ```
+## Architecture
 
+- **Frontend**: `Streamlit` app at `takehome/frontend/app.py`
+  - Uploads the document
+  - Calls backend `/verify_type` on upload
+  - Calls backend `/extract` on submit
+  - Runs `/verify` during review to flag authenticity only on suspicion
+  - Renders extracted fields, checks, and actions to save
+
+- **Backend**: `FastAPI` app at `takehome/backend/main.py`
+  - `/health`: health check
+  - `/verify_type`: light-weight doc-type inference
+  - `/verify`: authenticity/integrity heuristic via LLM
+  - `/extract`: structured extraction via LLM + rule validators
+
+- **LLM integration**: `takehome/backend/extract.py`, `takehome/backend/verify.py`
+  - Uses Fireworks `LLM(model="llama4-maverick-instruct-basic", deployment_type="auto")`
+  - Vision chat with base64 data URL payloads
+  - Prompts return strictly JSON; backend hardens parsing
+
+- **Validation**: `takehome/backend/validators.py`
+  - Required fields per doc type
+  - Age ≥ 18
+  - Expiry date validity
+  - Cross-doc consistency (rule-first + optional LLM fallback)
+
+- **Persistence**: local files under `local_db/`
+  - JSONL index: `local_db/cases.jsonl`
+  - Per-case JSON: `local_db/cases/<CASE_ID>/case.json`
+
+    
 ### /verify (POST)
 - Purpose: Authenticity/integrity heuristic (show a flag only if suspicious)
 - Input: multipart/form-data
