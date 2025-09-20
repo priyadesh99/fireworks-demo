@@ -9,13 +9,16 @@ from datetime import datetime
 import random
 import base64
 import hashlib
+import pandas 
 
 # -----------------------
 # Config
 # -----------------------
-# Option A: set here in code
-BACKEND_URL = "http://localhost:8000/extract"  # <-- change me
-BACKEND_URL_BOTH = "http://localhost:8000/extract/both"
+# Backend base URL (env override recommended for deployments)
+BACKEND_BASE = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+EXTRACT_URL = f"{BACKEND_BASE}/extract"
+VERIFY_TYPE_URL = f"{BACKEND_BASE}/verify_type"
+VERIFY_URL = f"{BACKEND_BASE}/verify"
 
 # Local "DB" directory
 DB_ROOT = os.getenv("LOCAL_DB_DIR", os.path.join(os.getcwd(), "local_db"))
@@ -62,6 +65,37 @@ def mask_text(s: str | None) -> str:
     if len(s) <= 6:
         return "•" * len(s)
     return s[:2] + "•" * (len(s) - 6) + s[-4:]
+
+# Friendly labels/icons for validators
+
+def status_icon(status: str) -> str:
+    s = (status or "").lower()
+    if s == "pass":
+        return "✅"
+    if s == "warn":
+        return "⚠️"
+    return "❌"
+
+def friendly_label(raw_name: str | None) -> str:
+    if not raw_name:
+        return "Check"
+    key = raw_name.replace("validate_", "").replace("required_fields_", "").lower()
+    mapping = {
+        "required_fields_passport": "All required passport fields present",
+        "required_fields_drivers_license": "All required driver’s license fields present",
+        "drivers_license_required_fields": "All required driver’s license fields present",
+        "passport_required_fields": "All required passport fields present",
+        "age": "Age is 18+ (DOB valid)",
+        "age_check": "Age is 18+ (DOB valid)",
+        "expiry": "Document not expired",
+        "expiry_date": "Document not expired",
+        "expiry_check": "Document not expired",
+        "consistency_passport_and_drivers_license": "Passport and license details are consistent",
+        "consistency": "Passport and license details are consistent",
+        "issuing_country": "Issuing country recognized",
+        "issuing_state": "Issuing state recognized",
+    }
+    return mapping.get(key, raw_name.replace("_", " ").strip().capitalize())
 
 # Optional encryption using Fernet if available; else fallback to AES-less XOR-like mask using base64
 FERNET = None
@@ -133,6 +167,12 @@ if "_seeded_cases" not in st.session_state:
     st.session_state["_seeded_cases"] = True
 
 # -----------------------
+# Helpers
+# -----------------------
+def _flag_submit():
+    st.session_state["suppress_verify_once"] = True
+
+# -----------------------
 # UI
 # -----------------------
 # Security notice (removed detailed encryption messaging per request)
@@ -165,29 +205,49 @@ if doc_file:
     else:
         st.caption("PDF uploaded (preview not rendered).")
 
-    # Type verification (no caching)
-    with st.status("Checking document type…", expanded=False) as status:
-        try:
-            v_mp = []
-            uf = doc_file; uf_bytes = uf.read(); uf.seek(0)
-            v_mp.append(("files", (uf.name, io.BytesIO(uf_bytes), uf.type or "application/octet-stream")))
-            v_payload = {"doc_type": selected_doc_type}
-            v_resp = requests.post("http://localhost:8000/verify_type", data=v_payload, files=v_mp, timeout=20)
-            v_resp.raise_for_status()
-            v = v_resp.json()
-            expected = str(v.get("expected_type") or selected_doc_type).lower()
-            inferred = str(v.get("inferred_type") or "").lower()
-            has_match = v.get("match")
-            type_mismatch = (has_match is False and inferred != expected) or (has_match is None and inferred and inferred not in (expected, "unknown"))
-            if type_mismatch and inferred != "unknown":
-                status.update(label="Document type mismatch", state="error")
-                msg = f"Document does not seem to be a {expected}."
-                st.warning(msg)
+    # Type verification with cache to avoid respinning on reruns
+    try:
+        uf = doc_file; uf_bytes = uf.read(); uf.seek(0)
+        file_sig = hashlib.sha1(uf_bytes).hexdigest()
+        cache_key = f"{file_sig}:{selected_doc_type}"
+        if "type_verify_cache" not in st.session_state:
+            st.session_state["type_verify_cache"] = {}
+        cache = st.session_state["type_verify_cache"]
+
+        # If suppressing after submit and we have cache, render static
+        if st.session_state.get("suppress_verify_once") and cache_key in cache:
+            prev = cache[cache_key]
+            if prev.get("type_mismatch") and prev.get("inferred") != "unknown":
+                st.warning("Document type mismatch")
             else:
-                status.update(label="Type verified ✓", state="complete")
-        except Exception as e:
-            status.update(label="Type verification unavailable", state="error")
-            st.warning(f"{e}")
+                st.caption("Type verified ✓")
+        # Already verified for this file+type
+        elif cache_key in cache:
+            prev = cache[cache_key]
+            if prev.get("type_mismatch") and prev.get("inferred") != "unknown":
+                st.warning("Document type mismatch")
+            else:
+                st.caption("Type verified ✓")
+        else:
+            with st.status("Checking document type…", expanded=False) as status:
+                v_mp = []
+                v_mp.append(("files", (uf.name, io.BytesIO(uf_bytes), uf.type or "application/octet-stream")))
+                v_payload = {"doc_type": selected_doc_type}
+                v_resp = requests.post(VERIFY_TYPE_URL, data=v_payload, files=v_mp, timeout=20)
+                v_resp.raise_for_status()
+                v = v_resp.json()
+                expected = str(v.get("expected_type") or selected_doc_type).lower()
+                inferred = str(v.get("inferred_type") or "").lower()
+                has_match = v.get("match")
+                type_mismatch = (has_match is False and inferred != expected) or (has_match is None and inferred and inferred not in (expected, "unknown"))
+                cache[cache_key] = {"type_mismatch": bool(type_mismatch and inferred != "unknown"), "inferred": inferred, "expected": expected}
+                if type_mismatch and inferred != "unknown":
+                    status.update(label="Document type mismatch", state="error")
+                    st.warning(f"Document does not seem to be a {expected}.")
+                else:
+                    status.update(label="Type verified ✓", state="complete")
+    except Exception as e:
+        st.warning(f"{e}")
 
 # Spacer
 st.write("")
@@ -210,7 +270,7 @@ if files:
 if errors:
     st.error(" \n".join(f"• {e}" for e in errors))
 
-submit = st.button("Submit for Extraction", disabled=(doc_file is None))
+submit = st.button("Submit for Extraction", key="submit_extract", disabled=(doc_file is None), on_click=_flag_submit)
 
 # -----------------------
 # Submission (writes review_data) and rendering (reads review_data)
@@ -223,7 +283,7 @@ if submit:
             uf = doc_file; uf_bytes = uf.read(); uf.seek(0)
             mp.append(("files", (uf.name, io.BytesIO(uf_bytes), uf.type or "application/octet-stream")))
             payload = {"doc_type": selected_doc_type, "case_id": case_id or ""}
-            resp = requests.post(BACKEND_URL, data=payload, files=mp, timeout=60)
+            resp = requests.post(EXTRACT_URL, data=payload, files=mp, timeout=60)
             resp.raise_for_status()
             r = resp.json()
 
@@ -239,6 +299,9 @@ if submit:
             st.session_state["review_data"] = merged
         except Exception as e:
             st.error(f"Backend request failed: {e}")
+        finally:
+            # Clear suppression after completing extraction
+            st.session_state["suppress_verify_once"] = False
 
 # Render only if we have review_data in session
 data = st.session_state.get("review_data")
@@ -277,7 +340,7 @@ if data:
                 v_mp = []
                 uf = doc_file; uf_bytes = uf.read(); uf.seek(0)
                 v_mp.append(("files", (uf.name, io.BytesIO(uf_bytes), uf.type or "application/octet-stream")))
-                v_resp = requests.post("http://localhost:8000/verify", files=v_mp, timeout=20, data={"doc_type": selected_doc_type})
+                v_resp = requests.post(VERIFY_URL, files=v_mp, timeout=20, data={"doc_type": selected_doc_type})
                 v_resp.raise_for_status()
                 v = v_resp.json()
             suspected = bool((v.get("is_suspected_fraud") if "is_suspected_fraud" in v else (v.get("integrity") or {}).get("is_suspected_fraud")))
@@ -294,16 +357,27 @@ if data:
         if not validators:
             st.write("No checks available.")
         else:
-            for v in validators:
-                status = (v.get("status") or "").lower()
-                name = v.get("name") or "check"
-                line = f"{name} — {status}"
-                if status == "pass":
-                    st.write(f"✅ {line}")
-                elif status == "warn":
-                    st.write(f"⚠️ {line}")
+            # Summary
+            total = len(validators)
+            num_pass = sum(1 for v in validators if (v.get("status") or "").lower() == "pass")
+            st.markdown(f"**Checks passed:** {num_pass}/{total}")
+            try:
+                st.progress(num_pass / total)
+            except Exception:
+                pass
+            # Simplified checklist ordered by importance (fails, warns, passes)
+            def _order_key(v: dict) -> int:
+                s = (v.get("status") or "").lower()
+                return {"pass": 2, "warn": 1}.get(s, 0)
+            for v in sorted(validators, key=_order_key):
+                s = (v.get("status") or "").lower()
+                icon = status_icon(s)
+                label = friendly_label(v.get("name"))
+                desc = v.get("message") or v.get("details") or v.get("reason") or ""
+                if desc:
+                    st.write(f"{icon} {label} — {desc}")
                 else:
-                    st.write(f"❌ {line}")
+                    st.write(f"{icon} {label}")
 
     # Actions: separate controls
     st.divider()

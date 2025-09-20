@@ -1,0 +1,12 @@
+{
+  "case_id": "17200",
+  "created_at": "2025-09-20T04:07:16.395944Z",
+  "mark_for_review": true,
+  "document_type": "passport",
+  "passport": {
+    "name": "BENJAMIN FRANKLIN",
+    "dob": "1706-01-17",
+    "expiry_date": "2028-01-15",
+    "id_number": "575034801"
+  }
+}
