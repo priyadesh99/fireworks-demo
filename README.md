@@ -45,7 +45,7 @@ streamlit run takehome/frontend/app.py
 
 Open the Streamlit URL shown in the terminal (usually `http://localhost:8501`).
 
-
+--- 
 ## Backend API
 
 ### /health (GET)
@@ -64,6 +64,7 @@ Open the Streamlit URL shown in the terminal (usually `http://localhost:8501`).
   "match": true
 }
 ```
+---
 ## Architecture
 
 - **Frontend**: `Streamlit` app at `takehome/frontend/app.py`
@@ -94,7 +95,7 @@ Open the Streamlit URL shown in the terminal (usually `http://localhost:8501`).
   - JSONL index: `local_db/cases.jsonl`
   - Per-case JSON: `local_db/cases/<CASE_ID>/case.json`
 
-    
+ ---   
 ### /verify (POST)
 - Purpose: Authenticity/integrity heuristic (show a flag only if suspicious)
 - Input: multipart/form-data
