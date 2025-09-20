@@ -24,7 +24,7 @@ pip install fastapi uvicorn python-multipart pydantic streamlit requests python-
 ## Environment variables
 
 - `FIREWORKS_API_KEY` (required by backend)
-- `BACKEND_URL` (optional for frontend; defaults to `https://fireworks-demo-kyc.onrender.com` in the demo. Set to your local backend during dev.)
+- `BACKEND_URL` (optional for frontend; defaults to `http://127.0.0.1:8000` in the demo. Set to your local backend during dev.)
 ---
 
 ## Running locally
