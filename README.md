@@ -38,7 +38,7 @@ export BACKEND_URL=http://127.0.0.1:8000
 Run streamlit run app.py inside the /frontend folder 
 
 Open the Streamlit URL shown in the terminal (usually `http://localhost:8501`).
-
+```
 --- 
 ## Backend API
 
