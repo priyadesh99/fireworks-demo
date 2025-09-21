@@ -18,7 +18,6 @@ firewoks_demo/
 
 Example installation:
 ```bash
-python -m venv .venv && source .venv/bin/activate
 pip install fastapi uvicorn python-multipart pydantic streamlit requests python-dotenv fireworks pandas
 ```
 ## Environment variables
@@ -32,8 +31,7 @@ pip install fastapi uvicorn python-multipart pydantic streamlit requests python-
 1) Start the backend (FastAPI):
 ```bash
 # From repo root
-source .venv/bin/activate
-Run uvicorn main:app --reload --port 8000
+Run uvicorn main:app --reload --port 8000 inside the /backend folder 
 ```
 
 2) Start the frontend (Streamlit):
@@ -41,7 +39,7 @@ Run uvicorn main:app --reload --port 8000
 # New terminal, same repo root
 source .venv/bin/activate
 export BACKEND_URL=http://127.0.0.1:8000
-Run streamlit run app.py
+Run streamlit run app.py inside the /frontend folder 
 
 Open the Streamlit URL shown in the terminal (usually `http://localhost:8501`).
 
