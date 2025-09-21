@@ -30,14 +30,11 @@ pip install fastapi uvicorn python-multipart pydantic streamlit requests python-
 
 1) Start the backend (FastAPI):
 ```bash
-# From repo root
 Run uvicorn main:app --reload --port 8000 inside the /backend folder 
 ```
 
 2) Start the frontend (Streamlit):
 ```bash
-# New terminal, same repo root
-source .venv/bin/activate
 export BACKEND_URL=http://127.0.0.1:8000
 Run streamlit run app.py inside the /frontend folder 
 
