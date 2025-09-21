@@ -5,7 +5,6 @@
 
 ```
 firewoks_demo/
- ├─ takehome/
  │   ├─ backend/
  │   │   ├─ main.py                # FastAPI app and endpoints
  │   │   ├─ extract.py             # Fireworks LLM extraction helpers
