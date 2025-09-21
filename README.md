@@ -33,7 +33,7 @@ pip install fastapi uvicorn python-multipart pydantic streamlit requests python-
 ```bash
 # From repo root
 source .venv/bin/activate
-uvicorn takehome.backend.main:app --reload --port 8000
+Run uvicorn main:app --reload --port 8000
 ```
 
 2) Start the frontend (Streamlit):
@@ -41,7 +41,7 @@ uvicorn takehome.backend.main:app --reload --port 8000
 # New terminal, same repo root
 source .venv/bin/activate
 export BACKEND_URL=http://127.0.0.1:8000
-streamlit run takehome/frontend/app.py
+Run streamlit run app.py
 
 Open the Streamlit URL shown in the terminal (usually `http://localhost:8501`).
 
